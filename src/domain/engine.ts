@@ -1,18 +1,18 @@
 import { cutPath, distance, EPS, length, pathLength, pathPosition, pointAt, project, reversePath, spanLength } from './geometry';
-import type { Destination, Interval, Layout, Port, Scenario, Train, Vec } from './types';
+import { bufferIntervals, expandIntervals, nextPorts, pathsConflict, samePort } from './metric';
+export { overlaps } from './metric';
+import type { Destination, Interval, Layout, Scenario, Train, Vec } from './types';
 
 export const trainLength = (train: Train) => train.sections.reduce((sum, s) => sum + s.length, 0);
 export const travelPath = (train: Train) => train.leading === 'A' ? train.path : reversePath(train.path);
 export const lead = (train: Train): Destination => pathPosition(travelPath(train), trainLength(train));
 export const trailing = (train: Train): Destination => pathPosition(travelPath(train), 0);
-const samePort = (a: Port, b: Port) => a.segment === b.segment && a.end === b.end;
-const nextPorts = (layout: Layout, port: Port) => layout.links.flatMap(link => samePort(link.from, port) ? [link.to] : samePort(link.to, port) ? [link.from] : []);
 const min = (s: Interval) => Math.min(s.from, s.to);
 const max = (s: Interval) => Math.max(s.from, s.to);
-export const overlaps = (a: Interval, b: Interval, margin = 0) => a.segment === b.segment && max(a) > min(b) - margin + EPS && min(a) < max(b) + margin - EPS;
+
 
 export function pointsOccupants(layout: Layout, scenario: Scenario, pointsId: string): string[] {
-  return scenario.trains.filter(train => train.path.some(s => layout.points[pointsId].zone.some(z => overlaps(s, z, layout.margins.points)))).map(t => t.id);
+  return scenario.trains.filter(train => pathsConflict(layout, train.path, layout.points[pointsId].zone, layout.margins.points)).map(t => t.id);
 }
 export function changePoints(layout: Layout, scenario: Scenario, pointsId: string): { scenario: Scenario; error?: string } {
   const occupants = pointsOccupants(layout, scenario, pointsId);
@@ -59,9 +59,11 @@ export function forwardRoute(layout: Layout, scenario: Scenario, train: Train): 
     const end = sign > 0 ? length(s) : 0;
     const terminal = { segment, end: sign > 0 ? 'b' as const : 'a' as const };
     const buffer = layout.buffers.some(b => samePort(b, terminal));
-    const to = buffer ? end - sign * layout.margins.buffer : end;
-    if (sign * (to - at) > EPS) path.push({ segment, from: at, to });
-    if (buffer) return { path, distance: pathLength(path), reason: `Buffer stop on ${segment}: ${layout.margins.buffer} m allowance already included.` };
+    if (sign * (end - at) > EPS) path.push({ segment, from: at, to: end });
+    if (buffer) {
+      const distance = Math.max(0, pathLength(path) - layout.margins.buffer);
+      return { path: cutPath(path, 0, distance), distance, reason: `Buffer stop on ${segment}: ${layout.margins.buffer} m allowance already included.` };
+    }
     const ports = nextPorts(layout, terminal);
     const permitted = ports.find(p => {
       const gate = layout.segments[p.segment].gate;
@@ -77,13 +79,13 @@ export function forwardRoute(layout: Layout, scenario: Scenario, train: Train): 
 
 // Distance at which a moving leading end first enters an interval. Analytical
 // interval intersection protects against tunnelling at any frame/pointer step.
-function firstEntry(path: Interval[], interval: Interval, margin = 0): number | undefined {
+function firstEntry(path: Interval[], interval: Interval): number | undefined {
   let offset = 0;
   for (const s of path) {
     if (s.segment === interval.segment) {
       const sign = Math.sign(s.to - s.from) || 1;
-      const a = sign > 0 ? min(interval) - margin : max(interval) + margin;
-      const b = sign > 0 ? max(interval) + margin : min(interval) - margin;
+      const a = sign > 0 ? min(interval) : max(interval);
+      const b = sign > 0 ? max(interval) : min(interval);
       const enter = Math.max(0, sign * (a - s.from));
       const leave = Math.min(spanLength(s), sign * (b - s.from));
       if (leave > enter + EPS) return offset + enter;
@@ -99,10 +101,10 @@ export function obstructionLimit(layout: Layout, scenario: Scenario, train: Trai
     if (distance !== undefined && distance < result.distance - EPS) result = { distance, reason };
   };
   for (const other of scenario.trains.filter(t => t.id !== train.id)) {
-    for (const interval of other.path) consider(firstEntry(route, interval, layout.margins.train), `Train ${other.id} occupies the required interval on ${interval.segment} (${layout.margins.train} m clearance).`);
+    for (const interval of expandIntervals(layout, other.path, layout.margins.train)) consider(firstEntry(route, interval), `Train ${other.id} occupies the required interval on ${interval.segment} (${layout.margins.train} m clearance).`);
     for (const points of Object.values(layout.points)) {
-      if (!other.path.some(s => points.zone.some(z => overlaps(s, z, layout.margins.points)))) continue;
-      for (const zone of points.zone) consider(firstEntry(route, zone, layout.margins.points), `Train ${other.id} occupies the fouling/clearance zone of points ${points.id}.`);
+      if (!pathsConflict(layout, other.path, points.zone, layout.margins.points)) continue;
+      for (const zone of expandIntervals(layout, points.zone, layout.margins.points)) consider(firstEntry(route, zone), `Train ${other.id} occupies the fouling/clearance zone of points ${points.id}.`);
     }
   }
   return result;
@@ -155,10 +157,9 @@ export function validateMove(layout: Layout, scenario: Scenario, trainId: string
   for (const s of path) {
     const gate = layout.segments[s.segment].gate;
     if (gate && scenario.points[gate.points] !== gate.position) return reject(`Points ${gate.points} are set to the other route. Required: ${gate.position}.`);
-    for (const buffer of layout.buffers.filter(b => b.segment === s.segment)) {
-      const allowed = buffer.end === 'a' ? layout.margins.buffer : length(layout.segments[s.segment]) - layout.margins.buffer;
-      if ((buffer.end === 'a' && min(s) < allowed - EPS) || (buffer.end === 'b' && max(s) > allowed + EPS)) return reject(`The whole train cannot fit before the stopping limit on ${s.segment}. Buffer allowance: ${layout.margins.buffer} m.`);
-    }
+  }
+  for (const zone of bufferIntervals(layout)) {
+    if (firstEntry(path, zone) !== undefined) return reject(`The whole train cannot fit before the stopping limit. Buffer allowance: ${layout.margins.buffer} m.`);
   }
   const limit = obstructionLimit(layout, scenario, train, path, { distance: base.distance, reason: '' });
   if (limit.distance < base.distance - EPS) return reject(limit.reason);
@@ -166,7 +167,7 @@ export function validateMove(layout: Layout, scenario: Scenario, trainId: string
   const moved = result.trains.find(t => t.id === trainId)!;
   if (Math.abs(pathLength(moved.path) - trainLength(train)) > EPS) return reject('The whole train cannot fit before the stopping limit.');
   for (const other of scenario.trains.filter(t => t.id !== trainId)) {
-    if (moved.path.some(s => other.path.some(o => overlaps(s, o, layout.margins.train)))) return reject(`Train ${other.id} occupies the required interval.`);
+    if (pathsConflict(layout, moved.path, other.path, layout.margins.train)) return reject(`Train ${other.id} occupies the required interval.`);
   }
   return { ...base, valid: true, reason: `Route clear · ${base.distance.toFixed(1)} m · full ${trainLength(train)} m footprint checked.`, result };
 }
@@ -204,18 +205,22 @@ export interface Clearance {
 export function clearancePlan(layout: Layout, scenario: Scenario, trainId: string, pointsId: string): Clearance {
   const train = scenario.trains.find(t => t.id === trainId)!, total = trainLength(train);
   const forward = forwardRoute(layout, scenario, train);
-  const combined = cutPath([...travelPath(train), ...forward.path], 0, total + pathLength(forward.path));
+  // Include a short route behind the tail so a boundary just across a join
+  // is still measurable while the tail occupies only its margin.
+  const backwardTrain = { ...train, leading: train.leading === 'A' ? 'B' as const : 'A' as const };
+  const backward = cutPath(forwardRoute(layout, scenario, backwardTrain).path, 0, layout.margins.points);
+  const behind = pathLength(backward);
+  const combined = [...reversePath(backward), ...travelPath(train), ...forward.path];
   const zone = layout.points[pointsId].zone;
-  let offset = 0, lastExit: number | undefined;
+  let offset = -behind, lastExit: number | undefined;
   let boundary: Destination | undefined;
   for (const s of combined) {
     const sign = Math.sign(s.to - s.from);
     for (const z of zone) {
       if (s.segment !== z.segment) continue;
       const lo = Math.max(min(s), min(z)), hi = Math.min(max(s), max(z));
-      const justBehind = overlaps(s, z, layout.margins.points) && (sign > 0 ? max(z) <= s.from : min(z) >= s.from);
-      if (hi < lo - EPS && !justBehind) continue;
-      const exit = justBehind ? (sign > 0 ? max(z) : min(z)) : (sign > 0 ? hi : lo), d = offset + sign * (exit - s.from);
+      if (hi < lo - EPS) continue;
+      const exit = sign > 0 ? hi : lo, d = offset + sign * (exit - s.from);
       if (lastExit === undefined || d >= lastExit) { lastExit = d; boundary = { segment: s.segment, at: exit }; }
     }
     offset += spanLength(s);
