@@ -44,7 +44,7 @@ Playwright starts/reuses the local Vite server. It uses Brave headlessly at 1440
 | Action | Control |
 | --- | --- |
 | Select a train | Click its body, or T01/T02 in the side panel |
-| Choose travel direction | Reverse leading end, or **R** |
+| Choose travel direction | Click a destination or drag either way; the appropriate cab is selected automatically |
 | Preview a move | Click a track ahead of the active end |
 | Constrained drag | Drag any part of the train in Select / move mode; release keeps the preview |
 | Exact metric destination | Expand **Enter exact destination**, choose track and metres from its geometry start, then Preview |
@@ -58,11 +58,11 @@ Playwright starts/reuses the local Vite server. It uses Brave headlessly at 1440
 | History | Undo / Redo, or Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z |
 | Restore a preset | Reset; safely cancels an active animation and clears history |
 
-Keyboard shortcuts are suspended while typing into fields. Enter on a focused button activates that button normally. Only one train can move at once. Selection, previews, points, reversal, presets and history are locked during animation. Reset remains available. Camera actions never change a movement; automatic camera fitting is suppressed during dragging. At shorter desktop heights, the train/points area scrolls while the movement command stays available.
+Keyboard shortcuts are suspended while typing into fields. Enter on a focused button activates that button normally. Only one train can move at once. Selection, previews, points, presets and history are locked during animation. Reset remains available. Camera actions never change a movement; automatic camera fitting is suppressed during dragging. At shorter desktop heights, the train/points area scrolls while the movement command stays available.
 
-The white circle marks the exact active leading end; the amber bar marks the exact trailing end. The continuous coloured centreline is the authoritative occupied length. Dashed teal/red lines show the proposed route. Gold marks the selected clearance boundary; violet marks the minimum clear stopping position. The selected points zone has a pale gold highlight. Inactive points routes are dashed grey. A rejected preview explains the blocker and cannot be executed.
+Both ends have cabs. No manual leading-end selection is needed. A preview derives the movement direction without changing the scenario; Cancel restores the previous display, and Execute commits direction and movement as one history action. The white circle marks the exact moving end for the preview or last movement; the amber bar marks the exact trailing end. The continuous coloured centreline is the authoritative occupied length. Dashed teal/red lines show the proposed route. Gold marks the selected clearance boundary; violet marks the minimum clear stopping position. The selected points zone has a pale gold highlight. Inactive points routes are dashed grey. A rejected preview explains the blocker and cannot be executed.
 
-Dragging projects displacement of the grabbed point onto the train's current permitted route. It never uses a nearby road as a new connection. It may follow that route even if the pointer leaves its centreline; look at the preview and target label before executing. At the route's allowed end the drag target saturates. Collision checks still reject a long drag through another train. Use exact input when pixel-level selection is insufficient.
+Dragging projects displacement of the grabbed point onto the permitted routes from both ends and uses the direction you drag. It never uses a nearby road as a new connection. It may follow that route even if the pointer leaves its centreline; look at the preview and target label before executing. At the route's allowed end the drag target saturates. Collision checks still reject a long drag through another train. Use exact input when pixel-level selection is insufficient.
 
 ## Reversing-shunt walkthrough
 
@@ -70,9 +70,8 @@ Dragging projects displacement of the grabbed point onto the train's current per
 2. Select P01. The room-to-reverse card reports **150 m** additional movement. Choose **Preview clear move**, then **Execute movement**. Alternatively click H near the violet marker, or enter H @ 90 m exactly.
 3. T01's head is now H @ 90 m and its tail H @ 165 m. P01's H boundary is at 170 m, leaving the required 5 m tail margin. P01 is free.
 4. Set P01 to **Reverse**. Leave P02 **Normal**.
-5. Reverse T01's leading end to **B**. It stays physically in place; the new head is H @ 165 m.
-6. Click R2 ahead of the train, or preview **R2 @ 110 m** using exact input. Execute. The train follows P01's curved route, the ladder and P02's normal route. Its final occupied interval is R2 @ 35–110 m.
-7. Undo and Redo restore complete movements and points states, one action at a time. Reversing the leading end is also one action.
+5. Click R2, or preview **R2 @ 110 m** using exact input. The cab facing R2 is chosen automatically; no separate reversal command is needed. Execute. The train follows P01's curved route, the ladder and P02's normal route. Its final occupied interval is R2 @ 35–110 m.
+6. Undo and Redo restore complete movements and points states, one action at a time. Automatic direction changes are included in the movement action.
 
 The other presets use identical infrastructure:
 
@@ -93,7 +92,7 @@ buffer ── H ── P01 <
 - World coordinates are metres. H runs from x = −180 to 0 at y = 0; R1 starts at (40, 0); R2 at (110, 36); R3 at (110, 72). All road buffers have x = 330. All positions displayed as `track @ metres` are measured from that segment's first geometry vertex, regardless of travel direction.
 - H is 180 m, R1 290 m, L 30 m, R2/R3 220 m. Each normal points route is 40 m. Each curved route is approximately 55.37 m, derived from its sampled centreline. The exact sum of polyline edges is authoritative; no independent length property exists.
 - Curves use 40 short line spans. Track rendering, occupied highlights, section paths and distance calculations use the same vertices. There is one camera scale for both axes and all infrastructure. Zoom, pan and resize only change the camera. The 20 m scale bar uses that same scale. Labels, widths and hit targets can vary for readability; longitudinal train lengths do not.
-- Connections are explicit, never inferred from proximity or a visual crossing. A points route has a common/toe endpoint and one branch endpoint. Only the selected route can be traversed, in either direction. Direct branch-to-branch travel is impossible without an explicit reversing command. Misaligned points reject a movement; they are never switched automatically.
+- Connections are explicit, never inferred from proximity or a visual crossing. A points route has a common/toe endpoint and one branch endpoint. Only the selected route can be traversed, in either direction. Direct branch-to-branch travel is impossible without first moving clear and requesting a destination in the opposite direction. Misaligned points reject a movement; they are never switched automatically.
 - Each train stores its directed **canonical B → A occupied path**, plus an active leading-end flag. Sections retain their stable IDs and order along that canonical path after reversal. Movement appends travelled intervals and trims the trailing length. It can span multiple tracks and points segments.
 - T01 has three 25 m sections, giving 75 m total; T02 has two 20 m sections. Section length includes its allocated coupler space: section lengths sum directly, with no extra physical gap. Small decorative insets separate visible bodies inside those intervals. The continuous occupancy highlight and end markers remain exact. This is not a bogie/body dynamics model.
 - Buffers reserve **5 m** from the physical end. `forwardRoute` already returns this allowed stopping limit; clearance calculations never deduct it again. Other trains require **3 m** longitudinal separation. Equality at the configured separation is permitted (numeric epsilon 1e−7 m).
@@ -101,7 +100,7 @@ buffer ── H ── P01 <
 - Points occupancy expands those intervals by the configurable **5 m** demo margin. These conservative zones also exclude a conflicting movement on another branch while occupied. One train's occupation anywhere in a points zone prevents other trains from entering that zone, even with disjoint longitudinal intervals on different branches. Trains can otherwise share a long road with adequate interval separation. The demo's adjoining intervals cover every turnout connection; this is not a general signalling/interlocking engine.
 - `clearancePlan` finds the last selected-zone exit along the entire occupied plus prospective route. It places the trailing end 5 m beyond that boundary, then checks the full route, points, other trains and usable stopping limit. If the head is already 30 m beyond the boundary, a 75 m train needs **50 m** more, not 80 m. With an allowed limit 70 m beyond the boundary the shortfall is 10 m; with 90 m the remaining room is 10 m. Once the zone and margin are fully behind the tail, the calculation reports already clear.
 - Swept interval checks are analytical, independent of pointer distance and animation frame size. Only a successfully revalidated command can start moving. Animation advances at a fictional **35 m/s**, using elapsed time; no acceleration, braking or operational speed model is implied. The whole move is validated before animation, and conflicting edits remain disabled until completion.
-- A completed move, points change or reversal creates one history entry. Animation frames and previews create none. Rejected commands return the unchanged source scenario. A new action after Undo clears Redo; Reset clears both stacks and cancels pending animation callbacks.
+- A completed move (including its automatic cab change) or points change creates one history entry. Animation frames and previews create none. Rejected commands return the unchanged source scenario. A new action after Undo clears Redo; Reset clears both stacks and cancels pending animation callbacks.
 
 ## Source map
 

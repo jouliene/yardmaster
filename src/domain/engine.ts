@@ -22,6 +22,10 @@ export function changePoints(layout: Layout, scenario: Scenario, pointsId: strin
 export function reverseTrain(scenario: Scenario, trainId: string): Scenario {
   return { ...scenario, trains: scenario.trains.map(t => t.id === trainId ? { ...t, leading: t.leading === 'A' ? 'B' : 'A' } : t) };
 }
+// Cab selection is derived from a proposed movement, never a separate UI action.
+export function withMovementDirection(scenario: Scenario, trainId: string, leading: Train['leading']): Scenario {
+  return scenario.trains.find(t => t.id === trainId)!.leading === leading ? scenario : reverseTrain(scenario, trainId);
+}
 
 // Search the explicitly linked graph in the active direction, ignoring gates
 // only to explain a requested route. Validation below never changes a gate.
@@ -130,7 +134,7 @@ export function dragTarget(layout: Layout, scenario: Scenario, trainId: string, 
 }
 export interface Movement {
   valid: boolean; reason: string; distance: number; path: Interval[]; stop: Destination;
-  trainId: string; source: Scenario; result?: Scenario;
+  trainId: string; leading: Train['leading']; source: Scenario; result?: Scenario;
 }
 export function advanceTrain(train: Train, extension: Interval[], distance: number): Train {
   const travel = travelPath(train), total = trainLength(train);
@@ -139,12 +143,12 @@ export function advanceTrain(train: Train, extension: Interval[], distance: numb
 }
 export function scenarioAtMovement(movement: Movement, distance: number): Scenario {
   const step = Math.max(0, Math.min(distance, movement.distance));
-  return { ...movement.source, trains: movement.source.trains.map(t => t.id === movement.trainId ? advanceTrain(t, movement.path, step) : t) };
+  return { ...movement.source, trains: movement.source.trains.map(t => t.id === movement.trainId ? advanceTrain({ ...t, leading: movement.leading }, movement.path, step) : t) };
 }
 export function validateMove(layout: Layout, scenario: Scenario, trainId: string, target: Destination): Movement {
   const train = scenario.trains.find(t => t.id === trainId)!;
   const path = findRoute(layout, train, target);
-  const base: Movement = { valid: false, reason: '', distance: path ? pathLength(path) : 0, path: path ?? [], stop: target, trainId, source: scenario };
+  const base: Movement = { valid: false, reason: '', distance: path ? pathLength(path) : 0, path: path ?? [], stop: target, trainId, leading: train.leading, source: scenario };
   const reject = (reason: string) => ({ ...base, reason });
   if (!path) return reject('No direct movement exists in the selected direction. Reverse the leading end or choose a connected track.');
   if (base.distance <= EPS) return reject('Choose a destination ahead of the active leading end.');
@@ -166,10 +170,25 @@ export function validateMove(layout: Layout, scenario: Scenario, trainId: string
   }
   return { ...base, valid: true, reason: `Route clear · ${base.distance.toFixed(1)} m · full ${trainLength(train)} m footprint checked.`, result };
 }
+// Try both cabs without mutating the scenario. Preserve the blocker on the
+// actual route instead of hiding it behind a failed search in the other direction.
+export function planMove(layout: Layout, scenario: Scenario, trainId: string, target: Destination): Movement {
+  const forward = validateMove(layout, scenario, trainId, target);
+  if (forward.path.length) return forward;
+  const backward = validateMove(layout, reverseTrain(scenario, trainId), trainId, target);
+  if (backward.path.length) return { ...backward, source: scenario };
+  return { ...forward, reason: 'No direct route to this destination from either end. A shunt may need an intermediate stop.' };
+}
+export function planDrag(layout: Layout, scenario: Scenario, trainId: string, grab: Vec, pointer: Vec): Movement {
+  const candidates = [scenario, reverseTrain(scenario, trainId)].map(oriented =>
+    validateMove(layout, oriented, trainId, dragTarget(layout, oriented, trainId, grab, pointer)));
+  const command = candidates[1].distance > candidates[0].distance ? candidates[1] : candidates[0];
+  return { ...command, source: scenario };
+}
 // Revalidate at commit time. A stale preview cannot overwrite another action.
 export function commitMove(layout: Layout, scenario: Scenario, movement: Movement): { scenario: Scenario; error?: string } {
   if (movement.source !== scenario) return { scenario, error: 'The scenario changed. Preview the movement again.' };
-  const checked = validateMove(layout, scenario, movement.trainId, movement.stop);
+  const checked = validateMove(layout, withMovementDirection(scenario, movement.trainId, movement.leading), movement.trainId, movement.stop);
   return checked.valid ? { scenario: checked.result! } : { scenario, error: checked.reason };
 }
 

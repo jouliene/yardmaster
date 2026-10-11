@@ -41,15 +41,13 @@ test('click clear / points change / reverse / curved entry into R2, undo and red
   await expectPosition(page, 'leading-position', 'H', 90);
   await expect(page.getByTestId('points-lock')).toContainText('free');
   await page.getByRole('button', { name: 'Set Reverse', exact: true }).click();
-  await page.getByRole('button', { name: 'Reverse leading end' }).click();
-  await expectPosition(page, 'leading-position', 'H', 165);
   await clickTrack(page, 220, 36);
   await expect(page.getByTestId('movement-result')).toContainText('READY TO MOVE');
   await execute(page);
   await expectPosition(page, 'leading-position', 'R2', 110);
   await expectPosition(page, 'trailing-position', 'R2', 35);
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expectPosition(page, 'leading-position', 'H', 165);
+  await expectPosition(page, 'leading-position', 'H', 90);
   await page.getByRole('button', { name: 'Redo' }).click();
   await expectPosition(page, 'leading-position', 'R2', 110);
   await page.screenshot({ path: 'test-results/yardmaster-shunt-complete.png', fullPage: true });
@@ -99,7 +97,7 @@ test('camera actions preserve placement and Reset cancels an active animation', 
   await page.getByRole('button', { name: 'Select / move' }).click();
   await page.getByRole('button', { name: 'Preview clear move', exact: true }).click();
   await page.getByRole('button', { name: 'Execute movement' }).click();
-  await expect(page.getByRole('button', { name: 'Reverse leading end' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Set Reverse', exact: true })).toBeDisabled();
   await expect(page.getByLabel('Scenario', { exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
   await expect(page.getByTestId('leading-position')).toHaveText(initial!);
@@ -108,15 +106,13 @@ test('camera actions preserve placement and Reset cancels an active animation', 
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });
 
-test('misaligned points explain rejection; exact entry and keyboard reversal work', async ({ page }) => {
+test('misaligned points explain rejection; exact entry works without manual cab selection', async ({ page }) => {
   await page.getByRole('button', { name: 'Set Reverse', exact: true }).click();
   await clickTrack(page, -90);
   await expect(page.getByTestId('movement-result')).toContainText('Points P01 are set to the other route');
   await expect(page.getByTestId('leading-position')).toContainText('A · R1 @ 20.0 m');
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
-  await page.getByRole('button', { name: 'Reverse leading end' }).click();
-  await expect(page.getByTestId('leading-position')).toContainText('B · R1 @ 95.0 m');
-  await page.keyboard.press('r');
+  await expect(page.getByRole('button', { name: 'Reverse leading end' })).toHaveCount(0);
   await expect(page.getByTestId('leading-position')).toContainText('A · R1 @ 20.0 m');
   await page.getByText('Enter exact destination', { exact: true }).click();
   await page.getByLabel('Destination track').selectOption('H');
@@ -127,6 +123,22 @@ test('misaligned points explain rejection; exact entry and keyboard reversal wor
   await expect(page.getByTestId('clearance-distance')).toContainText('50.0 m');
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByRole('button', { name: 'Redo' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Reverse leading end' }).click();
+  await page.getByRole('button', { name: 'Set Reverse', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Redo' })).toBeDisabled();
+});
+
+
+test('drag either way automatically chooses the cab and Undo restores one movement', async ({ page }) => {
+  await drag(page, 100, 0, 140, 0);
+  await expect(page.getByTestId('movement-result')).toContainText('READY TO MOVE');
+  await expect(page.getByTestId('leading-position')).toContainText('B · R1 @ 95.0 m');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel preview' }).click();
+  await expect(page.getByTestId('leading-position')).toContainText('A · R1 @ 20.0 m');
+  await drag(page, 100, 0, 140, 0);
+  await execute(page);
+  await expectPosition(page, 'leading-position', 'R1', 135);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByTestId('leading-position')).toContainText('A · R1 @ 20.0 m');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });

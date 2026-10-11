@@ -1,5 +1,11 @@
 # YardMaster project status
 
+## Navigation update — step 1
+
+The original v1 is saved in local baseline commit `7199fce`. Manual leading-end selection has been removed: click and drag infer the working cab automatically. Preview and cancellation leave the scenario unchanged; cab changes are committed and undone together with the movement. The same points, fouling, buffer and swept-collision checks still apply. Clearance feedback follows the preview's direction (or the last movement when no preview is active).
+
+Validation: 34 domain tests, 6 Brave UI workflows, strict type checking and production build passed. This step is committed separately from map controls and unified panning. The original delivery record below describes the baseline.
+
 Verified on 2026-10-11. Project directory: `/home/neo/jouliene/yardmaster`.
 
 All four requested version 1 milestones are implemented. The original `Yard_Planner_Codex_Prompt.md` is retained unchanged. The directory was initially not a Git repository and contained only that prompt; no unrelated project was changed. No deployment or hosted service was created.

@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
 import YardCanvas from './canvas/YardCanvas';
 import { makeScenario, presets, yard } from './data/yard';
-import { availableMovement, changePoints, clearancePlan, commitMove, dragTarget, lead, pointsOccupants, reverseTrain, scenarioAtMovement, trailing, trainLength, validateMove, type Movement } from './domain/engine';
+import { availableMovement, changePoints, clearancePlan, commitMove, lead, planDrag, planMove, pointsOccupants, scenarioAtMovement, trailing, trainLength, withMovementDirection, type Movement } from './domain/engine';
 import { historyReducer, newHistory } from './domain/history';
 import type { Destination, Scenario, Vec } from './domain/types';
 
@@ -20,7 +20,7 @@ export default function App() {
   const animation = useRef<number | undefined>(undefined), generation = useRef(0);
   const grab = useRef<Vec>({ x: 0, y: 0 });
   const busy = animated !== undefined, locked = busy || gesture;
-  const scenario = animated ?? history.present;
+  const scenario = animated ?? (preview ? withMovementDirection(history.present, selected, preview.leading) : history.present);
   const train = scenario.trains.find(t => t.id === selected)!;
   const clearance = clearancePlan(yard, scenario, selected, selectedPoints);
   const available = availableMovement(yard, scenario, train);
@@ -37,11 +37,13 @@ export default function App() {
   const clearPreview = () => setPreview(undefined);
   const select = (id: string) => { if (busy) return; setSelected(id); clearPreview(); };
   const focusOn = (kind: 'yard' | 'train' | 'manoeuvre') => { if (!gesture) setFocus(f => ({ id: f.id + 1, kind })); };
-  const destination = (target: Destination, id = selected) => {
-    if (busy) return;
-    const result = validateMove(yard, history.present, id, target);
+  const showPreview = (result: Movement) => {
+    const target = result.stop;
     setPreview(result); setNotice(result.reason);
     setTargetTrack(target.segment); setTargetMetres(target.at.toFixed(1));
+  };
+  const destination = (target: Destination, id = selected) => {
+    if (!busy) showPreview(planMove(yard, history.present, id, target));
   };
   const execute = () => {
     if (locked || !preview?.valid) return;
@@ -49,7 +51,7 @@ export default function App() {
     if (checked.error) { setNotice(checked.error); clearPreview(); return; }
     const command = preview, token = ++generation.current;
     const start = performance.now(), speed = 35; // Demonstration speed, m/s.
-    setAnimated(command.source); setProgress(0); setNotice(`Moving ${selected} · ${metres(command.distance)} at demo speed 35 m/s`);
+    setAnimated(scenarioAtMovement(command, 0)); setProgress(0); setNotice(`Moving ${selected} · ${metres(command.distance)} at demo speed 35 m/s`);
     const tick = (now: number) => {
       if (generation.current !== token) return;
       const distance = Math.min(command.distance, (now - start) * speed / 1000);
@@ -71,7 +73,6 @@ export default function App() {
     setTargetTrack('H'); setTargetMetres('90'); focusOn('yard');
   };
   const undoRedo = (type: 'undo' | 'redo') => { if (locked) return; dispatch({ type }); clearPreview(); setNotice(type === 'undo' ? 'Last action undone.' : 'Action restored.'); };
-  const reverse = () => { if (locked) return; dispatch({ type: 'commit', scenario: reverseTrain(history.present, selected) }); clearPreview(); setNotice(`${selected}: leading end reversed. Physical placement unchanged.`); };
   const togglePoints = () => {
     if (locked) return;
     const result = changePoints(yard, history.present, selectedPoints);
@@ -84,7 +85,6 @@ export default function App() {
       if (e.key === 'Enter' && (e.target as HTMLElement).closest('button')) return;
       if (e.key === 'Escape' && !busy) { clearPreview(); setNotice('Preview cancelled. Scenario unchanged.'); }
       if (locked) return;
-      if (e.key.toLowerCase() === 'r') reverse();
       if (e.key.toLowerCase() === 'f') focusOn('yard');
       if (e.key.toLowerCase() === 'p') setPan(p => !p);
       if (e.key === 'Enter') execute();
@@ -111,10 +111,10 @@ export default function App() {
         <YardCanvas layout={yard} scenario={scenario} selected={selected} selectedPoints={selectedPoints} onSelect={select}
           onPoints={id => { if (!locked) { setSelectedPoints(id); clearPreview(); } }}
           onDestination={destination} onDragStart={(_, p) => { grab.current = p; }}
-          onDrag={(id, p) => destination(dragTarget(yard, history.present, id, grab.current, p), id)}
+          onDrag={(id, p) => { if (!busy) showPreview(planDrag(yard, history.present, id, grab.current, p)); }}
           onGesture={setGesture} busy={busy} pan={pan} focus={focus} preview={preview}
           boundary={clearance.boundary} proposed={clearance.stop}/>
-        <div className="canvas-help"><span><kbd>Wheel</kbd> Zoom at pointer <kbd>Middle drag</kbd> Pan <kbd>R</kbd> Reverse <kbd>Enter</kbd> Execute</span><span>Dragging previews only. Execute to commit.</span></div>
+        <div className="canvas-help"><span><kbd>Wheel</kbd> Zoom at pointer <kbd>Middle drag</kbd> Pan <kbd>Enter</kbd> Execute</span><span>Dragging previews only. Execute to commit.</span></div>
       </section>
       <aside aria-label="Movement planner">
         <div className="planner-context">
@@ -123,9 +123,9 @@ export default function App() {
           <div className="section-heading"><h2>{selected}</h2><span className="pill mint">{train.sections.length} SECTIONS</span></div>
           <div className="train-tabs">{scenario.trains.map(t => <button key={t.id} disabled={locked} className={selected === t.id ? 'active' : ''} onClick={() => select(t.id)}>{t.id}<span>{trainLength(t)} m</span></button>)}</div>
           <div className="metric-row"><span>Total occupied length</span><strong>{metres(trainLength(train))}</strong></div>
-          <div className="metric-row"><span>Leading end</span><strong data-testid="leading-position">{train.leading} · {location(head)}</strong></div>
-          <div className="metric-row"><span>Trailing end</span><strong data-testid="trailing-position">{location(tail)}</strong></div>
-          <button className="full" disabled={locked} onClick={reverse}>⇄ Reverse leading end <kbd>R</kbd></button>
+          <div className="metric-row"><span>Moving end (automatic)</span><strong data-testid="leading-position">{train.leading} · {location(head)}</strong></div>
+          <p className="compact">Cabs at both ends. Click or drag either way.</p>
+          <div className="metric-row"><span>Other end</span><strong data-testid="trailing-position">{location(tail)}</strong></div>
         </section>
         <section className="panel-section">
           <div className="eyebrow">02 / POINTS & CLEARANCE</div>
@@ -138,7 +138,7 @@ export default function App() {
             <div className="metric-row"><span>Leading-end clear stop</span><strong>{clearance.stop ? location(clearance.stop) : clearance.additional ? 'Beyond reachable track' : 'Already clear'}</strong></div>
             <div className="metric-row"><span>{clearance.shortfall ? 'Shortfall' : 'Room after clear stop'}</span><strong data-testid="room-result">{metres(clearance.shortfall || clearance.remaining)}</strong></div>
             <p>{clearance.reason}</p>
-            <button className="full" disabled={locked || !clearance.movement} onClick={() => { setPreview(clearance.movement); setNotice(clearance.reason); }}>Preview clear move</button>
+            <button className="full" disabled={locked || !clearance.movement} onClick={() => { setPreview(clearance.movement ? { ...clearance.movement, source: history.present } : undefined); setNotice(clearance.reason); }}>Preview clear move</button>
           </div>
         </section>
         </div><section className="panel-section destination-section">

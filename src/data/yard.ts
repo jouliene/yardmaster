@@ -35,7 +35,7 @@ export const yard: Layout = {
   margins: { train: 3, points: 5, buffer: 5 },
 };
 export const presets = [
-  { id: 'shunt', label: '01 · Reversing shunt', hint: 'Clear P01 into the headshunt, set P01 to Reverse, reverse T01, then enter R2.' },
+  { id: 'shunt', label: '01 · Reversing shunt', hint: 'Clear P01 into the headshunt, set P01 to Reverse, then click R2. The train changes direction automatically.' },
   { id: 'blocked', label: '02 · Occupied route', hint: 'T02 blocks the headshunt. A long move must stop before it, even when the destination is beyond it.' },
   { id: 'short', label: '03 · Not enough room', hint: 'T02 leaves only 70 m beyond the P01 boundary. T01 needs 80 m: a 10 m shortfall.' },
 ];
