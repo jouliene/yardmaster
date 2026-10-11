@@ -2,21 +2,29 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import YardCanvas from './canvas/YardCanvas';
 import { makeScenario, presets, yard } from './data/yard';
 import { availableMovement, changePoints, clearancePlan, commitMove, lead, planDrag, planMove, pointsOccupants, scenarioAtMovement, trailing, trainLength, withMovementDirection, type Movement } from './domain/engine';
-import { historyReducer, newHistory } from './domain/history';
+import { historyReducer, type History } from './domain/history';
+import { activateScenario } from './domain/activation';
+import { describeDiagnostics } from './domain/validation';
 import type { Destination, Scenario, Vec } from './domain/types';
 
 const metres = (n: number) => `${Math.abs(n) < 0.05 ? '0.0' : n.toFixed(1)} m`;
 const location = (p: Destination) => `${p.segment} @ ${metres(p.at)}`;
 export default function App() {
-  const [history, dispatch] = useReducer(historyReducer, undefined, () => newHistory(makeScenario()));
-  const [selected, setSelected] = useState('T01'), [selectedPoints, setSelectedPoints] = useState('P01');
+  const [initial] = useState(() => activateScenario(yard, makeScenario()));
+  if (!initial.valid) return <main><h1>YardMaster</h1><section className="validation-error" role="alert"><h2>Cannot activate yard</h2><pre>{describeDiagnostics(initial.diagnostics)}</pre></section></main>;
+  return <ActiveApp initialHistory={initial.history}/>;
+}
+function ActiveApp({ initialHistory }: { initialHistory: History }) {
+  const [history, dispatch] = useReducer(historyReducer, initialHistory);
+  const [activationError, setActivationError] = useState('');
+  const [selected, setSelected] = useState(initialHistory.present.trains[0].id), [selectedPoints, setSelectedPoints] = useState(Object.keys(yard.points)[0]);
   const [gesture, setGesture] = useState(false);
   const [focus, setFocus] = useState<{ id: number; kind: 'yard' | 'train' | 'manoeuvre' }>({ id: 0, kind: 'yard' });
   const [preview, setPreview] = useState<Movement | undefined>();
   const [animated, setAnimated] = useState<Scenario | undefined>();
   const [progress, setProgress] = useState(0);
   const [notice, setNotice] = useState('Select T01, then click a track or drag the train to preview a movement.');
-  const [targetTrack, setTargetTrack] = useState('H'), [targetMetres, setTargetMetres] = useState('90');
+  const [targetTrack, setTargetTrack] = useState(Object.hasOwn(yard.segments, 'H') ? 'H' : Object.keys(yard.segments)[0]), [targetMetres, setTargetMetres] = useState('90');
   const animation = useRef<number | undefined>(undefined), generation = useRef(0);
   const grab = useRef<Vec>({ x: 0, y: 0 });
   const busy = animated !== undefined, locked = busy || gesture;
@@ -25,7 +33,7 @@ export default function App() {
   const clearance = clearancePlan(yard, scenario, selected, selectedPoints);
   const available = availableMovement(yard, scenario, train);
   const occupants = pointsOccupants(yard, scenario, selectedPoints);
-  const preset = presets.find(p => p.id === history.present.id)!;
+  const preset = presets.find(p => p.id === history.present.id) ?? { id: history.present.id, hint: 'Select a train and preview a direct movement.' };
   const head = lead(train), tail = trailing(train);
 
   const cancelAnimation = () => {
@@ -68,9 +76,12 @@ export default function App() {
     animation.current = requestAnimationFrame(tick);
   };
   const reset = (id = history.present.id) => {
-    cancelAnimation(); dispatch({ type: 'reset', scenario: makeScenario(id) }); clearPreview(); setGesture(false);
-    setSelected('T01'); setSelectedPoints('P01'); setNotice('Scenario reset. Train and points placements restored.');
-    setTargetTrack('H'); setTargetMetres('90'); focusOn('yard');
+    const activation = activateScenario(yard, makeScenario(id), history);
+    if (!activation.valid) { setActivationError(describeDiagnostics(activation.diagnostics)); return; }
+    setActivationError('');
+    cancelAnimation(); dispatch({ type: 'reset', scenario: activation.history.present }); clearPreview(); setGesture(false);
+    setSelected(activation.history.present.trains[0].id); setSelectedPoints(Object.keys(yard.points)[0]); setNotice('Scenario reset. Train and points placements restored.');
+    setTargetTrack(Object.hasOwn(yard.segments, 'H') ? 'H' : Object.keys(yard.segments)[0]); setTargetMetres('90'); focusOn('yard');
   };
   const undoRedo = (type: 'undo' | 'redo') => { if (locked) return; dispatch({ type }); clearPreview(); setNotice(type === 'undo' ? 'Last action undone.' : 'Action restored.'); };
   const togglePoints = (id = selectedPoints) => {
@@ -107,6 +118,7 @@ export default function App() {
     </nav>
     <div className="workspace">
       <section className="yard-area">
+        {activationError && <div className="validation-error activation-error" role="alert">Scenario unchanged. {activationError}</div>}
         <div className="scenario-hint"><span>EXERCISE {preset.id === 'shunt' ? '01' : preset.id === 'blocked' ? '02' : '03'}</span><p>{preset.hint}</p></div>
         <YardCanvas layout={yard} scenario={scenario} selected={selected} selectedPoints={selectedPoints} onSelect={select}
           onTogglePoints={togglePoints}

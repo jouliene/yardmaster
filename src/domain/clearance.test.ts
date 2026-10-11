@@ -2,35 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { availableMovement, changePoints, clearancePlan, commitMove, planDrag, planMove, pointsOccupants, reverseTrain, scenarioAtMovement, validateMove } from './engine';
 import { pathLength } from './geometry';
 import { pathsConflict } from './metric';
-import type { Destination, Interval, Layout, Scenario } from './types';
 
-// The scalar coordinate is distance along the road, independent of segmentation.
-export function road(cuts = [0, 200], reversed = false) {
-  const layout: Layout = { segments: {}, links: [], points: {}, buffers: [], margins: { train: 3, points: 5, buffer: 5 } };
-  cuts.slice(1).forEach((end, i) => {
-    const id = `S${i}`, geometry = [{ x: cuts[i], y: 0 }, { x: end, y: 0 }];
-    layout.segments[id] = { id, label: id, geometry: reversed ? geometry.reverse() : geometry };
-    if (i) layout.links.push({ from: { segment: `S${i - 1}`, end: reversed ? 'a' : 'b' }, to: { segment: id, end: reversed ? 'b' : 'a' } });
-  });
-  const destination = (at: number): Destination => {
-    const i = Math.max(0, cuts.slice(1).findIndex(end => at <= end));
-    return { segment: `S${i}`, at: reversed ? cuts[i + 1] - at : at - cuts[i] };
-  };
-  const path = (from: number, to: number): Interval[] => {
-    const slices = cuts.slice(1).flatMap((end, i) => {
-      const lo = Math.max(Math.min(from, to), cuts[i]), hi = Math.min(Math.max(from, to), end);
-      if (hi <= lo) return [];
-      const local = (at: number) => reversed ? end - at : at - cuts[i];
-      return [{ segment: `S${i}`, from: local(from < to ? lo : hi), to: local(from < to ? hi : lo) }];
-    });
-    return from < to ? slices : slices.reverse();
-  };
-  const scenario = (a = 80, b = 90, c = 101, d = 111): Scenario => ({ id: 'road', points: {}, trains: [
-    { id: 'moving', leading: 'A', sections: [{ id: 'm', length: Math.abs(b - a) }], path: path(a, b) },
-    { id: 'parked', leading: 'A', sections: [{ id: 'p', length: Math.abs(d - c) }], path: path(c, d) },
-  ] });
-  return { layout, path, destination, scenario };
-}
+import { road } from './road.fixture';
 
 describe('physical clearance independent of ordinary joins', () => {
   it.each([{ cuts: [0, 200] }, { cuts: [0, 100, 200] }])('rejects the 2 m gap on road $cuts', ({ cuts }) => {
@@ -46,6 +19,8 @@ describe('joined metric route cases', () => {
     { cuts: [0, 200], reversed: false },
     { cuts: [0, 100, 200], reversed: false },
     { cuts: [0, 100, 200], reversed: true },
+    { cuts: [0, 100, 200], reversed: [1] },
+    { cuts: [0, 97, 98, 99, 100, 101, 200], reversed: [0, 2, 5] },
     { cuts: [0, 97, 98, 99, 100, 100.5, 101, 200], reversed: false },
     { cuts: [0, 85, 95, 100, 105, 200], reversed: true },
   ];

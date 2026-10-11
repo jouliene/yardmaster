@@ -6,3 +6,7 @@
 aside{display:flex;flex-direction:column;overflow:hidden}.planner-context{flex:1;min-height:0;overflow:auto}.destination-section{position:static;flex-shrink:0;border-top:1px solid #324552;box-shadow:none}.planner-context .panel-section{padding-top:11px;padding-bottom:11px}.planner-context .eyebrow{margin-bottom:7px}.clearance-big{margin:7px 0}.planner-context::-webkit-scrollbar{width:4px}.planner-context::-webkit-scrollbar-thumb{background:#4b6272}
 
 .navigation-hint{font-size:11px;color:#91a9b9;white-space:nowrap}
+
+.validation-error{padding:14px 24px;max-height:35vh;overflow:auto;white-space:pre-wrap;background:#3b2c27;color:#f4b49d;border-bottom:1px solid #765545;flex-shrink:0}.validation-error pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.yard-area{position:relative}.activation-error{position:absolute;top:0;left:0;right:0;z-index:5}

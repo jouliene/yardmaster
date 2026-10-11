@@ -104,12 +104,35 @@ buffer ── H ── P01 <
 - Swept interval checks are analytical, independent of pointer distance and animation frame size. Only a successfully revalidated command can start moving. Animation advances at a fictional **35 m/s**, using elapsed time; no acceleration, braking or operational speed model is implied. The whole move is validated before animation, and conflicting edits remain disabled until completion.
 - A completed move (including its automatic cab change) or points change creates one history entry. Animation frames and previews create none. Rejected commands return the unchanged source scenario. A new action after Undo clears Redo; Reset clears both stacks and cancels pending animation callbacks.
 
+## Connected metric clearance and validation
+
+Ordinary segmentation must not change physical occupancy, available movement or a clearance decision. The regression uses a 200 m road, a moving 10 m train at 80–90 m, a stationary train at 101–111 m and 3 m separation. Before this correction, splitting the road at 100 m incorrectly accepted a head at 99 m and reported 10 m available. Both representations now reject 99 m, accept exactly 98 m and report **8 m** available.
+
+`metric.ts` analytically extends occupied intervals and authored zones in longitudinal metres through explicit endpoint links. Any excess margin continues across as many short segments as necessary, respecting entry-port orientation and polyline arc length. It does not infer connections from coordinates or use animation sampling. Physical margins extend along potential linked routes independently of points settings; actual travel still requires aligned gates. At a points toe, extension enters the linked segment and traverses it, never jumps sideways between sibling ports. Train separation, points locking, shared fouling protection and buffer allowances use the same metric rules. Tail-clearance lookup also examines the short route behind the tail so a boundary on the preceding segment is retained.
+
+The pure `validateLayout(unknown)` and `validateScenario(layout, unknown)` functions return a discriminated result: `{ valid: true, value, diagnostics: [] }` or `{ valid: false, diagnostics }`. Diagnostics have a stable `code`, readable `message`, field `path` and, when identifiable, `entityId`. Shape/reference/numeric checks precede semantic checks, so malformed nested entries, NaN, infinity and sparse arrays are reported without entering geometry/routing code. Validation does not repair or mutate authored data.
+
+The supported contract is deliberately limited:
+
+- IDs use ASCII letters/digits, `_` and `-`, beginning with a letter or digit. Segment and points IDs must match their record keys; train IDs and section IDs are unique (section IDs across the entire scenario). Segments need readable labels, finite geometry and positive metric length, with no repeated consecutive vertices. All three margins are finite and non-negative.
+- Endpoint coincidence tolerance is **1e−6 m**. Interval bounds, continuity, length matching and clearance equality use **1e−7 m** absolute tolerance. Positive edges, sections and occupied/zone intervals must exceed that numerical epsilon. Length is the sum of the authored polyline edges, never an endpoint chord.
+- Layouts form a forest of explicitly linked segments. Disconnected components and unlinked visual crossings are valid. Ordinary ports have at most one link. A branching port may connect only the two opposite gated routes of one points object. Self-links, duplicate/reversed duplicate links, undirected cycles, alternative cyclic routes and ambiguous branches are rejected. Buffer ports are unique terminal ports with no simultaneous through connection.
+- Each points object has exactly one normal and one reverse gated segment, sharing one ungated toe port. Each route exits to one ungated adjoining segment; the points marker coincides with the toe. A zone must cover both complete gated routes and include a positive authored interval touching each of the three adjoining ports. Coverage may be expressed as contiguous intervals. The validator checks these supplied intervals, not an invented real-world fouling distance. General multi-segment gated routes, crossings with interlocking and cyclic routing remain unsupported.
+- Train paths are bounded, continuous, oriented sequences through explicit links. Contiguous slices on one segment are allowed; reversal within a slice sequence and segment revisits are rejected. Occupied length must equal total section length. Leading ends and all points states must be valid, including alignment of occupied gated routes. Overlap, inadequate metric separation across joins, buffer-margin occupation and multiple trains in one expanded shared points zone are errors. One train in a points zone is valid and locks it. An impossible proposed manoeuvre is not an invalid starting scenario: all three demo presets validate.
+
+`validateActivation` checks a complete layout/scenario pair. `activateScenario` adds the current desktop planner's requirement for at least one selectable train and points object, then creates fresh history only on success. The independent validators support empty yards and roads without points. Initial activation is checked once before mounting the planner/canvas. Preset selection and Reset validate the candidate before changing history, selection, preview or animation. Rejection displays diagnostics and returns the exact previous history, including Undo and Redo; a failed reset does not cancel an already valid movement. Full data validation is not run during animation frames.
+
+Milestone verification: **136 domain tests**, strict type checking and production build passed. **18 Brave browser workflows** passed, followed by a focused recheck of all five activation workflows after the error-overlay adjustment. Details are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md). Tests compare split/unsplit roads in both directions, mixed a/a and b/b port orientations, short chains, spanning trains, exact equality, curved arc lengths, continuous swept obstructions, points margins and buffers. Validation tests cover malformed data, topology, zone coverage, scenario consistency and atomic activation.
+
 ## Source map
 
 | Location | Responsibility |
 | --- | --- |
 | `src/domain/types.ts` | Layout, ports, intervals, trains and scenarios |
 | `src/domain/geometry.ts` | Arc lengths, slicing, projection and exact path geometry |
+| `src/domain/metric.ts` | Shared longitudinal margin expansion across explicit joins |
+| `src/domain/validation.ts` | Pure layout/scenario diagnostics and supported topology contract |
+| `src/domain/activation.ts` | Validated, atomic desktop activation/reset |
 | `src/domain/engine.ts` | Routes, occupancy, points, collision checks, drag targets and clearance |
 | `src/domain/history.ts` | Immutable action history |
 | `src/data/yard.ts` | Fictional infrastructure and three initial scenarios |
@@ -117,6 +140,8 @@ buffer ── H ── P01 <
 | `src/App.tsx` | UI selection, previews, reducer state and elapsed-time animation |
 | `src/domain/engine.test.ts` | Focused geometry, movement, clearance, history and camera tests |
 | `src/domain/navigation.test.ts` | Automatic cab selection, immutable previews and atomic movement history |
+| `src/domain/clearance.test.ts`, `validation.test.ts` | Segmentation regressions and data/activation contract tests |
+| `tests/validation-ui.spec.ts` | Brave invalid-initial-data and rejected preset/reset checks |
 | `tests/ui.spec.ts` | Actual Brave click/drag and complete shunt workflow tests |
 
 ## Version 1 boundaries
@@ -127,4 +152,4 @@ See [PROJECT_STATUS.md](PROJECT_STATUS.md) for verification and the next useful 
 
 ## Local checkpoints
 
-The original version is preserved in commit `7199fce`. Automatic direction, map points controls and unified mouse navigation were implemented and verified one at a time, in separate local commits. The later single-click points change is also isolated in its own commit. Use `git log --oneline -5` to inspect them. To undo a change without deleting history, use `git revert` with its commit hash, working newest first if reverting multiple steps. No remote repository or push is involved.
+The original version is preserved in commit `7199fce`. Automatic direction, map points controls and unified mouse navigation were implemented and verified one at a time, in separate local commits. The later single-click points change is also isolated in its own commit. Use `git log --oneline -5` to inspect them. To undo a change without deleting history, use `git revert` with its commit hash, working newest first if reverting multiple steps. The repository is public at https://github.com/jouliene/yardmaster. Step 2 work stays in local commits; this milestone does not push, deploy or modify remotes.
