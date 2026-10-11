@@ -50,8 +50,8 @@ Playwright starts/reuses the local Vite server. It uses Brave headlessly at 1440
 | Exact metric destination | Expand **Enter exact destination**, choose track and metres from its geometry start, then Preview |
 | Commit a valid preview | **Execute movement**, or **Enter** |
 | Discard a preview | Cancel preview, or **Escape** |
-| Select points | Click their symbol, or the points selector |
-| Change points | Set Normal / Set Reverse, enabled only when the full zone plus margin is free |
+| Select points | Click the points symbol or label on the map to open its local controls; the side selector also works |
+| Change points | Set Normal / Set Reverse in the map popup or side panel, enabled only when the full zone plus margin is free |
 | Zoom | Wheel, centred on the pointer |
 | Pan | Middle-button drag, or switch to Pan mode; **P** toggles modes |
 | Camera | Fit Yard (**F**), Focus Train, Focus Manoeuvre |
@@ -60,7 +60,7 @@ Playwright starts/reuses the local Vite server. It uses Brave headlessly at 1440
 
 Keyboard shortcuts are suspended while typing into fields. Enter on a focused button activates that button normally. Only one train can move at once. Selection, previews, points, presets and history are locked during animation. Reset remains available. Camera actions never change a movement; automatic camera fitting is suppressed during dragging. At shorter desktop heights, the train/points area scrolls while the movement command stays available.
 
-Both ends have cabs. No manual leading-end selection is needed. A preview derives the movement direction without changing the scenario; Cancel restores the previous display, and Execute commits direction and movement as one history action. The white circle marks the exact moving end for the preview or last movement; the amber bar marks the exact trailing end. The continuous coloured centreline is the authoritative occupied length. Dashed teal/red lines show the proposed route. Gold marks the selected clearance boundary; violet marks the minimum clear stopping position. The selected points zone has a pale gold highlight. Inactive points routes are dashed grey. A rejected preview explains the blocker and cannot be executed.
+Both ends have cabs. No manual leading-end selection is needed. A preview derives the movement direction without changing the scenario; Cancel restores the previous display, and Execute commits direction and movement as one history action. The white circle marks the exact moving end for the preview or last movement; the amber bar marks the exact trailing end. The continuous coloured centreline is the authoritative occupied length. Dashed teal/red lines show the proposed route. Gold marks the selected clearance boundary; violet marks the minimum clear stopping position. The selected points zone has a pale gold highlight. Clicking a points symbol opens an anchored control beside it with its state, switching button and any occupying trains. Selecting a train closes that popup. Inactive points routes are dashed grey. A rejected preview explains the blocker and cannot be executed.
 
 Dragging projects displacement of the grabbed point onto the permitted routes from both ends and uses the direction you drag. It never uses a nearby road as a new connection. It may follow that route even if the pointer leaves its centreline; look at the preview and target label before executing. At the route's allowed end the drag target saturates. Collision checks still reject a long drag through another train. Use exact input when pixel-level selection is insufficient.
 

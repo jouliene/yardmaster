@@ -73,11 +73,11 @@ export default function App() {
     setTargetTrack('H'); setTargetMetres('90'); focusOn('yard');
   };
   const undoRedo = (type: 'undo' | 'redo') => { if (locked) return; dispatch({ type }); clearPreview(); setNotice(type === 'undo' ? 'Last action undone.' : 'Action restored.'); };
-  const togglePoints = () => {
+  const togglePoints = (id = selectedPoints) => {
     if (locked) return;
-    const result = changePoints(yard, history.present, selectedPoints);
+    const result = changePoints(yard, history.present, id);
     if (result.error) setNotice(result.error);
-    else { dispatch({ type: 'commit', scenario: result.scenario }); clearPreview(); setNotice(`Points ${selectedPoints} set to ${result.scenario.points[selectedPoints]}.`); }
+    else { dispatch({ type: 'commit', scenario: result.scenario }); clearPreview(); setNotice(`Points ${id} set to ${result.scenario.points[id]}.`); }
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -109,6 +109,7 @@ export default function App() {
       <section className="yard-area">
         <div className="scenario-hint"><span>EXERCISE {preset.id === 'shunt' ? '01' : preset.id === 'blocked' ? '02' : '03'}</span><p>{preset.hint}</p></div>
         <YardCanvas layout={yard} scenario={scenario} selected={selected} selectedPoints={selectedPoints} onSelect={select}
+          onTogglePoints={togglePoints}
           onPoints={id => { if (!locked) { setSelectedPoints(id); clearPreview(); } }}
           onDestination={destination} onDragStart={(_, p) => { grab.current = p; }}
           onDrag={(id, p) => { if (!busy) showPreview(planDrag(yard, history.present, id, grab.current, p)); }}
@@ -120,7 +121,7 @@ export default function App() {
         <div className="planner-context">
         <section className="panel-section">
           <div className="eyebrow">01 / SELECTED TRAIN</div>
-          <div className="section-heading"><h2>{selected}</h2><span className="pill mint">{train.sections.length} SECTIONS</span></div>
+          <div className="section-heading"><h2 data-testid="selected-train">{selected}</h2><span className="pill mint">{train.sections.length} SECTIONS</span></div>
           <div className="train-tabs">{scenario.trains.map(t => <button key={t.id} disabled={locked} className={selected === t.id ? 'active' : ''} onClick={() => select(t.id)}>{t.id}<span>{trainLength(t)} m</span></button>)}</div>
           <div className="metric-row"><span>Total occupied length</span><strong>{metres(trainLength(train))}</strong></div>
           <div className="metric-row"><span>Moving end (automatic)</span><strong data-testid="leading-position">{train.leading} · {location(head)}</strong></div>
@@ -129,7 +130,7 @@ export default function App() {
         </section>
         <section className="panel-section">
           <div className="eyebrow">02 / POINTS & CLEARANCE</div>
-          <div className="points-row"><select aria-label="Selected points" value={selectedPoints} disabled={locked} onChange={e => { setSelectedPoints(e.target.value); clearPreview(); }}>{Object.keys(yard.points).map(id => <option key={id}>{id}</option>)}</select><span data-testid="points-state" className="points-position">{scenario.points[selectedPoints]}</span><button disabled={locked || occupants.length > 0} onClick={togglePoints}>Set {scenario.points[selectedPoints] === 'normal' ? 'Reverse' : 'Normal'}</button></div>
+          <div className="points-row"><select aria-label="Selected points" value={selectedPoints} disabled={locked} onChange={e => { setSelectedPoints(e.target.value); clearPreview(); }}>{Object.keys(yard.points).map(id => <option key={id}>{id}</option>)}</select><span data-testid="points-state" className="points-position">{scenario.points[selectedPoints]}</span><button disabled={locked || occupants.length > 0} onClick={() => togglePoints()}>Set {scenario.points[selectedPoints] === 'normal' ? 'Reverse' : 'Normal'}</button></div>
           <div className={`zone-status ${occupants.length ? 'amber-text' : 'mint-text'}`} data-testid="points-lock">{occupants.length ? `▣ Locked by ${occupants.join(', ')} · includes 5 m margin` : '◇ Clearance zone free'}</div>
           <div className={`clearance-card ${clearance.valid ? '' : 'blocked'}`}>
             <div className="clearance-title">{clearance.valid ? '◉' : '△'} ROOM TO REVERSE</div>

@@ -142,3 +142,34 @@ test('drag either way automatically chooses the cab and Undo restores one moveme
   await expect(page.getByTestId('leading-position')).toContainText('A · R1 @ 20.0 m');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });
+
+test('select trains and select/switch points directly on the map', async ({ page }) => {
+  await clickTrack(page, 285, 72);
+  await expect(page.getByTestId('selected-train')).toHaveText('T02');
+  await clickTrack(page, 100, 0);
+  await expect(page.getByTestId('selected-train')).toHaveText('T01');
+  await clickTrack(page, 70, 36);
+  const controls = page.getByRole('group', { name: 'P02 controls', exact: true });
+  await expect(controls).toBeVisible();
+  await expect(page.getByLabel('Selected points')).toHaveValue('P02');
+  await expect(page.getByTestId('movement-result')).toContainText('No movement previewed');
+  await controls.getByRole('button', { name: 'Set Reverse', exact: true }).click();
+  await expect(page.getByTestId('points-state')).toHaveText('reverse');
+  await expect(controls.getByRole('button', { name: 'Set Normal' })).toBeVisible();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByTestId('points-state')).toHaveText('normal');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await page.screenshot({ path: 'test-results/yardmaster-map-points.png', fullPage: true });
+  await controls.getByRole('button', { name: 'Close points controls' }).click();
+  await expect(controls).toHaveCount(0);
+});
+
+test('map points controls retain the occupied-zone lock', async ({ page }) => {
+  await drag(page, 72, 0, -18, 0);
+  await execute(page);
+  await clickTrack(page, 0, 0);
+  const controls = page.getByRole('group', { name: 'P01 controls', exact: true });
+  await expect(controls).toContainText('Locked by T01');
+  await expect(controls.getByRole('button', { name: 'Set Reverse' })).toBeDisabled();
+  await expect(page.getByTestId('points-state')).toHaveText('normal');
+});

@@ -1,5 +1,11 @@
 # YardMaster project status
 
+## Navigation update — step 2
+
+Train bodies and points symbols/labels are selectable directly on the map. Points selection opens a nearby control with the current position, a switching button and the occupying train IDs when locked. Map switching uses the same domain operation and one-action history as the side panel. The hit area around points is enlarged for easier selection; physical geometry is unchanged.
+
+Validation: 34 domain tests, 8 Brave UI workflows, strict type checking and production build passed. The map popup screenshot was inspected. Automatic direction is preserved in separate commit `8916243`; this map-control change is another independent commit.
+
 ## Navigation update — step 1
 
 The original v1 is saved in local baseline commit `7199fce`. Manual leading-end selection has been removed: click and drag infer the working cab automatically. Preview and cancellation leave the scenario unchanged; cab changes are committed and undone together with the movement. The same points, fouling, buffer and swept-collision checks still apply. Clearance feedback follows the preview's direction (or the last movement when no preview is active).
