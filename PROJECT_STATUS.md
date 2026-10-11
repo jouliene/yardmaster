@@ -1,5 +1,15 @@
 # YardMaster project status
 
+## Navigation update — step 3 (current)
+
+The Select / move and Pan modes are removed. Left-drag on background or a track pans; a short track click previews a destination. Left-drag on a train previews movement in either direction. Points open their map controls. The cursor changes with the target and closes during a drag. Middle-button panning still works anywhere.
+
+Pointer events distinguish clicks from drags with a 4 CSS pixel threshold, suppressing accidental commands after a pan. Zoom and focus do not alter an active drag. Background panning does not enter scenario history. Safety checks, preview-before-execute and one-action Undo are preserved.
+
+Final validation: **34 domain tests and 11 Brave UI workflows passed**, along with strict type checking and production build. Actual UI checks cover translated geometry selection after panning, cursor states, track-drag click suppression, middle-button panning over trains, automatic cab choice, map points locks and the complete reversing shunt. Screenshots were inspected at 1440 × 900. The existing bundle-size advisory remains non-blocking.
+
+Each navigation step is a separate local commit. Baseline: `7199fce`; automatic direction: `8916243`; map points controls: `e07187f`; unified mouse control: the latest navigation commit. Use `git log --oneline -4` to inspect these checkpoints; use `git revert` newest first to undo changes while preserving history. No remote was configured and nothing was pushed.
+
 ## Navigation update — step 2
 
 Train bodies and points symbols/labels are selectable directly on the map. Points selection opens a nearby control with the current position, a switching button and the occupying train IDs when locked. Map switching uses the same domain operation and one-action history as the side panel. The hit area around points is enlarged for easier selection; physical geometry is unchanged.

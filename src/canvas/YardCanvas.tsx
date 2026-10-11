@@ -12,18 +12,29 @@ interface Props {
   onTogglePoints: (id: string) => void;
   onDestination?: (d: Destination) => void; onDrag?: (id: string, p: Vec) => void;
   onDragStart?: (id: string, p: Vec) => void;
-  onGesture?: (active: boolean) => void; busy?: boolean; pan: boolean;
+  onGesture?: (active: boolean) => void; busy?: boolean;
   focus: { id: number; kind: 'yard' | 'train' | 'manoeuvre' };
   preview?: { path: Interval[]; stop?: Destination; valid: boolean };
   boundary?: Destination; proposed?: Destination;
 }
 const flat = (points: Vec[]) => points.flatMap(p => [p.x, p.y]);
+function interactionOf(target: Konva.Node): 'train' | 'points' | 'track' | 'background' {
+  let node: Konva.Node | null = target;
+  while (node) {
+    const kind: unknown = node.getAttr('interaction');
+    if (kind === 'train' || kind === 'points' || kind === 'track') return kind;
+    node = node.getParent();
+  }
+  return 'background';
+}
 export default function YardCanvas(props: Props) {
-  const { layout, scenario, selected, selectedPoints, busy, pan } = props;
+  const { layout, scenario, selected, selectedPoints, busy } = props;
   const host = useRef<HTMLDivElement>(null), stage = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ width: 900, height: 600 });
   const [camera, setCamera] = useState<Camera>({ x: 350, y: 250, scale: 1.5 });
   const [mapPoints, setMapPoints] = useState<string | null>(null);
+  const [cursor, setCursor] = useState('grab');
+  const suppressClick = useRef(false);
   const gesture = useRef<{ type: 'pan' | 'train'; start: Vec; camera: Camera; train?: string; dragged: boolean } | null>(null);
   useEffect(() => {
     const observer = new ResizeObserver(entries => {
@@ -53,6 +64,12 @@ export default function YardCanvas(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.focus.id, size.width, size.height]);
   const pointer = () => stage.current?.getPointerPosition() ?? { x: 0, y: 0 };
+  const cursorFor = (target: Konva.Node) => {
+    const kind = interactionOf(target);
+    if (busy && kind !== 'background') return 'not-allowed';
+    return kind === 'points' ? 'pointer' : kind === 'track' ? 'crosshair' : 'grab';
+  };
+  const endGesture = () => { gesture.current = null; props.onGesture?.(false); };
   const labelSize = 11 / camera.scale;
   const popupPoints = mapPoints && mapPoints === selectedPoints ? layout.points[mapPoints] : undefined;
   const popupLocks = popupPoints ? pointsOccupants(layout, scenario, popupPoints.id) : [];
@@ -61,23 +78,28 @@ export default function YardCanvas(props: Props) {
     const p = pointAt(layout.segments[d.segment], d.at);
     return <Group key={label} listening={false}><Line points={[p.x, p.y - 8 / camera.scale, p.x, p.y + 8 / camera.scale]} stroke={color} strokeWidth={2 / camera.scale}/><Text x={p.x + 5 / camera.scale} y={p.y + 12 / camera.scale} text={label} fill={color} fontSize={labelSize}/></Group>;
   };
-  return <div className={`canvas-host ${pan ? 'panning' : ''}`} ref={host} data-testid="yard-canvas" onContextMenu={e => e.preventDefault()}>
+  return <div className="canvas-host" style={{ cursor }} ref={host} data-testid="yard-canvas" onContextMenu={e => e.preventDefault()} onPointerCancel={() => { suppressClick.current = true; endGesture(); setCursor('grab'); }}>
     <div className="canvas-caption"><span className="live-dot"/> FICTIONAL YARD / METRIC VIEW <span>North Junction</span></div>
     <Stage ref={stage} width={size.width} height={size.height}
       onWheel={e => { e.evt.preventDefault(); if (!gesture.current) setCamera(c => zoom(c, pointer(), e.evt.deltaY > 0 ? 0.9 : 1 / 0.9)); }}
       onPointerDown={e => {
-        if (pan || e.evt.button === 1) { gesture.current = { type: 'pan', start: pointer(), camera, dragged: false }; props.onGesture?.(true); e.evt.preventDefault(); }
+        const kind = interactionOf(e.target);
+        if (e.evt.button === 1 || (e.evt.button === 0 && kind !== 'train' && kind !== 'points')) {
+          suppressClick.current = false; setMapPoints(null);
+          gesture.current = { type: 'pan', start: pointer(), camera, dragged: false };
+          props.onGesture?.(true); setCursor('grabbing'); e.evt.preventDefault();
+        }
       }}
-      onPointerMove={() => {
+      onPointerMove={e => {
         const g = gesture.current;
-        if (!g) return;
+        if (!g) { setCursor(cursorFor(e.target)); return; }
         const p = pointer();
-        if (distance(p, g.start) > 4) g.dragged = true;
-        if (g.type === 'pan') setCamera({ ...g.camera, x: g.camera.x + p.x - g.start.x, y: g.camera.y + p.y - g.start.y });
+        if (distance(p, g.start) > 4) { g.dragged = true; suppressClick.current = true; }
+        if (g.type === 'pan' && g.dragged) setCamera({ ...g.camera, x: g.camera.x + p.x - g.start.x, y: g.camera.y + p.y - g.start.y });
         else if (g.dragged && g.train) props.onDrag?.(g.train, toWorld(p, camera));
       }}
-      onPointerUp={() => { gesture.current = null; props.onGesture?.(false); }}
-      onPointerLeave={() => { gesture.current = null; props.onGesture?.(false); }}>
+      onPointerUp={e => { endGesture(); setCursor(cursorFor(e.target)); }}
+      onPointerLeave={() => { if (gesture.current) suppressClick.current = true; endGesture(); setCursor('grab'); }}>
       <Layer x={camera.x} y={camera.y} scaleX={camera.scale} scaleY={camera.scale}>
         {Array.from({ length: 29 }, (_, i) => <Line key={`x${i}`} points={[-220 + i * 20, -120, -220 + i * 20, 220]} stroke="#203141" strokeWidth={0.5 / camera.scale} listening={false}/>)}
         {Array.from({ length: 18 }, (_, i) => <Line key={`y${i}`} points={[-220, -120 + i * 20, 360, -120 + i * 20]} stroke="#203141" strokeWidth={0.5 / camera.scale} listening={false}/>)}
@@ -86,8 +108,8 @@ export default function YardCanvas(props: Props) {
           const active = !s.gate || scenario.points[s.gate.points] === s.gate.position;
           const middle = pointAt(s, length(s) * 0.65);
           return <Group key={s.id}>
-            <Line points={flat(s.geometry)} stroke={active ? '#718799' : '#394a58'} strokeWidth={3 / camera.scale} dash={active ? undefined : [5 / camera.scale, 5 / camera.scale]} hitStrokeWidth={18 / camera.scale}
-              onClick={e => { if (busy || pan || e.evt.button !== 0) return; props.onDestination?.({ segment: s.id, at: project(s, toWorld(pointer(), camera)).at }); }}/>
+            <Line interaction="track" points={flat(s.geometry)} stroke={active ? '#718799' : '#394a58'} strokeWidth={3 / camera.scale} dash={active ? undefined : [5 / camera.scale, 5 / camera.scale]} hitStrokeWidth={18 / camera.scale}
+              onPointerClick={e => { if (busy || suppressClick.current || e.evt.button !== 0) return; props.onDestination?.({ segment: s.id, at: project(s, toWorld(pointer(), camera)).at }); }}/>
             {!s.gate && <Text x={middle.x - 30 / camera.scale} y={middle.y - 24 / camera.scale} text={s.label} fontSize={labelSize} fill="#9bacba" listening={false}/>}
           </Group>;
         })}
@@ -103,9 +125,9 @@ export default function YardCanvas(props: Props) {
           const head = pointAt(layout.segments[train.leading === 'A' ? a.segment : b.segment], train.leading === 'A' ? a.at : b.at);
           const tail = pointAt(layout.segments[train.leading === 'A' ? b.segment : a.segment], train.leading === 'A' ? b.at : a.at);
           let offset = 0;
-          return <Group key={train.id} onPointerDown={e => {
-            if (busy || pan || e.evt.button !== 0) return;
-            setMapPoints(null);
+          return <Group key={train.id} interaction="train" onPointerDown={e => {
+            if (busy || e.evt.button !== 0) return;
+            setMapPoints(null); suppressClick.current = false; setCursor('grabbing');
             e.cancelBubble = true; props.onSelect(train.id); props.onDragStart?.(train.id, toWorld(pointer(), camera));
             gesture.current = { type: 'train', train: train.id, start: pointer(), camera, dragged: false }; props.onGesture?.(true);
           }}>
@@ -124,7 +146,9 @@ export default function YardCanvas(props: Props) {
             <Text x={head.x - 10 / camera.scale} y={head.y + 13 / camera.scale} text={`${train.id} · ${train.leading}`} fill={chosen ? '#8ce7d4' : '#b2c0d0'} fontSize={12 / camera.scale} fontStyle="bold"/>
           </Group>;
         })}
-        {Object.values(layout.points).map(p => <Group key={p.id} onClick={e => { if (!busy && !pan && e.evt.button === 0) { e.cancelBubble = true; props.onPoints(p.id); setMapPoints(p.id); } }}>
+        {Object.values(layout.points).map(p => <Group key={p.id} interaction="points"
+          onPointerDown={e => { if (e.evt.button === 0) { e.cancelBubble = true; suppressClick.current = false; } }}
+          onPointerClick={e => { if (!busy && !suppressClick.current && e.evt.button === 0) { e.cancelBubble = true; props.onPoints(p.id); setMapPoints(p.id); } }}>
           <Circle x={p.at.x} y={p.at.y} radius={6 / camera.scale} fill={selectedPoints === p.id ? '#e6b65d' : '#718799'} stroke="#101b27" strokeWidth={2 / camera.scale} hitStrokeWidth={24 / camera.scale}/>
           <Text x={p.at.x - 13 / camera.scale} y={p.at.y - 30 / camera.scale} text={`${p.id}\n${scenario.points[p.id] === 'normal' ? 'N' : 'R'}`} align="center" fontSize={11 / camera.scale} fill="#e5c182"/>
         </Group>)}
@@ -139,7 +163,7 @@ export default function YardCanvas(props: Props) {
     }}>
       <div className="map-points-title"><strong>{popupPoints.id}</strong><span>{scenario.points[popupPoints.id]}</span><button aria-label="Close points controls" onClick={() => setMapPoints(null)}>×</button></div>
       <p className={popupLocks.length ? 'amber-text' : 'mint-text'}>{popupLocks.length ? `Locked by ${popupLocks.join(', ')} · ${layout.margins.points} m margin` : 'Clearance zone free'}</p>
-      <button className="full" disabled={busy || pan || popupLocks.length > 0} onClick={() => props.onTogglePoints(popupPoints.id)}>Set {scenario.points[popupPoints.id] === 'normal' ? 'Reverse' : 'Normal'}</button>
+      <button className="full" disabled={busy || gesture.current !== null || popupLocks.length > 0} onClick={() => props.onTogglePoints(popupPoints.id)}>Set {scenario.points[popupPoints.id] === 'normal' ? 'Reverse' : 'Normal'}</button>
     </div>}
     <div className="canvas-bottom"><span>● Leading end <b>│</b> Trailing end <em>━</em> Occupied length</span><span><i style={{ width: 20 * camera.scale }}/>20 m <small>{camera.scale.toFixed(2)} px/m</small></span></div>
   </div>;

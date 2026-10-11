@@ -10,7 +10,7 @@ const location = (p: Destination) => `${p.segment} @ ${metres(p.at)}`;
 export default function App() {
   const [history, dispatch] = useReducer(historyReducer, undefined, () => newHistory(makeScenario()));
   const [selected, setSelected] = useState('T01'), [selectedPoints, setSelectedPoints] = useState('P01');
-  const [pan, setPan] = useState(false), [gesture, setGesture] = useState(false);
+  const [gesture, setGesture] = useState(false);
   const [focus, setFocus] = useState<{ id: number; kind: 'yard' | 'train' | 'manoeuvre' }>({ id: 0, kind: 'yard' });
   const [preview, setPreview] = useState<Movement | undefined>();
   const [animated, setAnimated] = useState<Scenario | undefined>();
@@ -86,7 +86,6 @@ export default function App() {
       if (e.key === 'Escape' && !busy) { clearPreview(); setNotice('Preview cancelled. Scenario unchanged.'); }
       if (locked) return;
       if (e.key.toLowerCase() === 'f') focusOn('yard');
-      if (e.key.toLowerCase() === 'p') setPan(p => !p);
       if (e.key === 'Enter') execute();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoRedo(e.shiftKey ? 'redo' : 'undo'); }
     };
@@ -99,7 +98,7 @@ export default function App() {
     <nav aria-label="Main controls">
       <label className="scenario-select">SCENARIO<select aria-label="Scenario" value={history.present.id} disabled={locked} onChange={e => reset(e.target.value)}>{presets.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
       <div className="toolbar-divider"/>
-      <button className={!pan ? 'active' : ''} disabled={locked} onClick={() => setPan(false)}>↖ Select / move</button><button className={pan ? 'active' : ''} disabled={locked} onClick={() => setPan(true)}>✥ Pan</button>
+      <span className="navigation-hint">Drag the background · Click a train or points</span>
       <div className="toolbar-spacer"/>
       <button disabled={gesture} onClick={() => focusOn('yard')}>Fit Yard</button><button disabled={gesture} onClick={() => focusOn('train')}>Focus Train</button><button disabled={gesture} onClick={() => focusOn('manoeuvre')}>Focus Manoeuvre</button>
       <div className="toolbar-divider"/>
@@ -113,9 +112,9 @@ export default function App() {
           onPoints={id => { if (!locked) { setSelectedPoints(id); clearPreview(); } }}
           onDestination={destination} onDragStart={(_, p) => { grab.current = p; }}
           onDrag={(id, p) => { if (!busy) showPreview(planDrag(yard, history.present, id, grab.current, p)); }}
-          onGesture={setGesture} busy={busy} pan={pan} focus={focus} preview={preview}
+          onGesture={setGesture} busy={busy} focus={focus} preview={preview}
           boundary={clearance.boundary} proposed={clearance.stop}/>
-        <div className="canvas-help"><span><kbd>Wheel</kbd> Zoom at pointer <kbd>Middle drag</kbd> Pan <kbd>Enter</kbd> Execute</span><span>Dragging previews only. Execute to commit.</span></div>
+        <div className="canvas-help"><span><kbd>Drag background</kbd> Pan <kbd>Click track</kbd> Destination <kbd>Wheel</kbd> Zoom <kbd>Enter</kbd> Execute</span><span>Drag a train either way to preview.</span></div>
       </section>
       <aside aria-label="Movement planner">
         <div className="planner-context">

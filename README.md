@@ -46,17 +46,19 @@ Playwright starts/reuses the local Vite server. It uses Brave headlessly at 1440
 | Select a train | Click its body, or T01/T02 in the side panel |
 | Choose travel direction | Click a destination or drag either way; the appropriate cab is selected automatically |
 | Preview a move | Click a track ahead of the active end |
-| Constrained drag | Drag any part of the train in Select / move mode; release keeps the preview |
+| Constrained drag | Drag any part of the train in either direction; release keeps the preview |
 | Exact metric destination | Expand **Enter exact destination**, choose track and metres from its geometry start, then Preview |
 | Commit a valid preview | **Execute movement**, or **Enter** |
 | Discard a preview | Cancel preview, or **Escape** |
 | Select points | Click the points symbol or label on the map to open its local controls; the side selector also works |
 | Change points | Set Normal / Set Reverse in the map popup or side panel, enabled only when the full zone plus margin is free |
 | Zoom | Wheel, centred on the pointer |
-| Pan | Middle-button drag, or switch to Pan mode; **P** toggles modes |
+| Pan | Left-drag empty background or a track; middle-button drag also pans anywhere. There are no mode switches |
 | Camera | Fit Yard (**F**), Focus Train, Focus Manoeuvre |
 | History | Undo / Redo, or Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z |
 | Restore a preset | Reset; safely cancels an active animation and clears history |
+
+The pointer shows a hand on free background or trains, a pointing finger on points and a crosshair on tracks. A short track click previews a destination; dragging a track pans the camera and never submits a movement. During a drag the hand closes.
 
 Keyboard shortcuts are suspended while typing into fields. Enter on a focused button activates that button normally. Only one train can move at once. Selection, previews, points, presets and history are locked during animation. Reset remains available. Camera actions never change a movement; automatic camera fitting is suppressed during dragging. At shorter desktop heights, the train/points area scrolls while the movement command stays available.
 
@@ -114,6 +116,7 @@ buffer ── H ── P01 <
 | `src/canvas/` | Pure camera math and Konva rendering/pointer interactions |
 | `src/App.tsx` | UI selection, previews, reducer state and elapsed-time animation |
 | `src/domain/engine.test.ts` | Focused geometry, movement, clearance, history and camera tests |
+| `src/domain/navigation.test.ts` | Automatic cab selection, immutable previews and atomic movement history |
 | `tests/ui.spec.ts` | Actual Brave click/drag and complete shunt workflow tests |
 
 ## Version 1 boundaries
@@ -121,3 +124,7 @@ buffer ── H ── P01 <
 No layout editor, real-depot reconstruction, saved sessions, import/export, recording/replay, automatic shunt solving, backend, accounts, cloud services, mobile UI or deployment. Reloading the page starts a fresh default scenario. One direct movement is planned at a time; reversing shunts require successive explicit commands. Buffer overruns, collisions, points and fouling checks follow only the documented fictional model. Longitudinal occupancy is authoritative; detailed vehicle-body clearance is outside scope.
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) for verification and the next useful increment.
+
+## Local checkpoints
+
+The original version is preserved in commit `7199fce`. Automatic direction, map points controls and unified mouse navigation were implemented and verified one at a time, in three separate local commits. Use `git log --oneline -4` to inspect them. To undo a change without deleting history, use `git revert` with its commit hash, working newest first if reverting multiple steps. No remote repository or push is involved.
