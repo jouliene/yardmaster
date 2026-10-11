@@ -1,6 +1,12 @@
 # YardMaster project status
 
-## Navigation update — step 3 (current)
+## Navigation update — step 4 (current)
+
+A single left click on a points symbol or label now selects and toggles it immediately, without opening a popup. The popup and its styling were removed. Occupied points remain unchanged and the status bar identifies the blocking train. Switching remains disabled during animation; each successful click is one Undo action. The side-panel selector still allows selection without switching.
+
+Validation: **34 domain tests and 13 Brave UI workflows passed**, plus strict type checking and production build. Browser checks include consecutive toggles, Undo/Redo, absence of popups, occupied-point rejection without a history entry, animation locking and middle-button panning without switching. This is a single separate local change after `88d0c47`.
+
+## Navigation update — step 3
 
 The Select / move and Pan modes are removed. Left-drag on background or a track pans; a short track click previews a destination. Left-drag on a train previews movement in either direction. Points open their map controls. The cursor changes with the target and closes during a drag. Middle-button panning still works anywhere.
 
@@ -8,7 +14,7 @@ Pointer events distinguish clicks from drags with a 4 CSS pixel threshold, suppr
 
 Final validation: **34 domain tests and 11 Brave UI workflows passed**, along with strict type checking and production build. Actual UI checks cover translated geometry selection after panning, cursor states, track-drag click suppression, middle-button panning over trains, automatic cab choice, map points locks and the complete reversing shunt. Screenshots were inspected at 1440 × 900. The existing bundle-size advisory remains non-blocking.
 
-Each navigation step is a separate local commit. Baseline: `7199fce`; automatic direction: `8916243`; map points controls: `e07187f`; unified mouse control: the latest navigation commit. Use `git log --oneline -4` to inspect these checkpoints; use `git revert` newest first to undo changes while preserving history. No remote was configured and nothing was pushed.
+Each navigation step is a separate local commit. Baseline: `7199fce`; automatic direction: `8916243`; map points controls: `e07187f`; unified mouse control: `88d0c47`. Use `git log --oneline -5` to inspect these checkpoints and the latest single-click update; use `git revert` newest first to undo changes while preserving history. No remote was configured and nothing was pushed.
 
 ## Navigation update — step 2
 

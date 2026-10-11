@@ -50,8 +50,8 @@ Playwright starts/reuses the local Vite server. It uses Brave headlessly at 1440
 | Exact metric destination | Expand **Enter exact destination**, choose track and metres from its geometry start, then Preview |
 | Commit a valid preview | **Execute movement**, or **Enter** |
 | Discard a preview | Cancel preview, or **Escape** |
-| Select points | Click the points symbol or label on the map to open its local controls; the side selector also works |
-| Change points | Set Normal / Set Reverse in the map popup or side panel, enabled only when the full zone plus margin is free |
+| Select points without switching | Use the points selector in the side panel |
+| Change points | Click the points symbol or label on the map once to select and toggle it. No popup. The side-panel button also works |
 | Zoom | Wheel, centred on the pointer |
 | Pan | Left-drag empty background or a track; middle-button drag also pans anywhere. There are no mode switches |
 | Camera | Fit Yard (**F**), Focus Train, Focus Manoeuvre |
@@ -62,16 +62,16 @@ The pointer shows a hand on free background or trains, a pointing finger on poin
 
 Keyboard shortcuts are suspended while typing into fields. Enter on a focused button activates that button normally. Only one train can move at once. Selection, previews, points, presets and history are locked during animation. Reset remains available. Camera actions never change a movement; automatic camera fitting is suppressed during dragging. At shorter desktop heights, the train/points area scrolls while the movement command stays available.
 
-Both ends have cabs. No manual leading-end selection is needed. A preview derives the movement direction without changing the scenario; Cancel restores the previous display, and Execute commits direction and movement as one history action. The white circle marks the exact moving end for the preview or last movement; the amber bar marks the exact trailing end. The continuous coloured centreline is the authoritative occupied length. Dashed teal/red lines show the proposed route. Gold marks the selected clearance boundary; violet marks the minimum clear stopping position. The selected points zone has a pale gold highlight. Clicking a points symbol opens an anchored control beside it with its state, switching button and any occupying trains. Selecting a train closes that popup. Inactive points routes are dashed grey. A rejected preview explains the blocker and cannot be executed.
+Both ends have cabs. No manual leading-end selection is needed. A preview derives the movement direction without changing the scenario; Cancel restores the previous display, and Execute commits direction and movement as one history action. The white circle marks the exact moving end for the preview or last movement; the amber bar marks the exact trailing end. The continuous coloured centreline is the authoritative occupied length. Dashed teal/red lines show the proposed route. Gold marks the selected clearance boundary; violet marks the minimum clear stopping position. The selected points zone has a pale gold highlight. A single left click on a points symbol or label selects it and switches Normal ↔ Reverse. If occupied, its position stays unchanged and the status bar names the blocking train. Switching is disabled during animation. Each successful click is one Undo action; rejected clicks add no history. Inactive points routes are dashed grey. A rejected preview explains the blocker and cannot be executed.
 
 Dragging projects displacement of the grabbed point onto the permitted routes from both ends and uses the direction you drag. It never uses a nearby road as a new connection. It may follow that route even if the pointer leaves its centreline; look at the preview and target label before executing. At the route's allowed end the drag target saturates. Collision checks still reject a long drag through another train. Use exact input when pixel-level selection is insufficient.
 
 ## Reversing-shunt walkthrough
 
 1. Load **01 · Reversing shunt**. T01 is 75 m long, with leading end A at R1 @ 20 m and trailing end at R1 @ 95 m. A faces toward P01 and H.
-2. Select P01. The room-to-reverse card reports **150 m** additional movement. Choose **Preview clear move**, then **Execute movement**. Alternatively click H near the violet marker, or enter H @ 90 m exactly.
+2. Leave P01 Normal; use the side-panel selector if you need to select it without switching. The room-to-reverse card reports **150 m** additional movement. Choose **Preview clear move**, then **Execute movement**. Alternatively click H near the violet marker, or enter H @ 90 m exactly.
 3. T01's head is now H @ 90 m and its tail H @ 165 m. P01's H boundary is at 170 m, leaving the required 5 m tail margin. P01 is free.
-4. Set P01 to **Reverse**. Leave P02 **Normal**.
+4. Click P01 on the map once to set it to **Reverse**. Leave P02 **Normal**.
 5. Click R2, or preview **R2 @ 110 m** using exact input. The cab facing R2 is chosen automatically; no separate reversal command is needed. Execute. The train follows P01's curved route, the ladder and P02's normal route. Its final occupied interval is R2 @ 35–110 m.
 6. Undo and Redo restore complete movements and points states, one action at a time. Automatic direction changes are included in the movement action.
 
@@ -127,4 +127,4 @@ See [PROJECT_STATUS.md](PROJECT_STATUS.md) for verification and the next useful 
 
 ## Local checkpoints
 
-The original version is preserved in commit `7199fce`. Automatic direction, map points controls and unified mouse navigation were implemented and verified one at a time, in three separate local commits. Use `git log --oneline -4` to inspect them. To undo a change without deleting history, use `git revert` with its commit hash, working newest first if reverting multiple steps. No remote repository or push is involved.
+The original version is preserved in commit `7199fce`. Automatic direction, map points controls and unified mouse navigation were implemented and verified one at a time, in separate local commits. The later single-click points change is also isolated in its own commit. Use `git log --oneline -5` to inspect them. To undo a change without deleting history, use `git revert` with its commit hash, working newest first if reverting multiple steps. No remote repository or push is involved.

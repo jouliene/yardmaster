@@ -141,35 +141,39 @@ test('drag either way automatically chooses the cab and Undo restores one moveme
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });
 
-test('select trains and select/switch points directly on the map', async ({ page }) => {
+test('single map clicks toggle points without a popup and each click is one action', async ({ page }) => {
   await clickTrack(page, 285, 72);
   await expect(page.getByTestId('selected-train')).toHaveText('T02');
   await clickTrack(page, 100, 0);
   await expect(page.getByTestId('selected-train')).toHaveText('T01');
   await clickTrack(page, 70, 36);
-  const controls = page.getByRole('group', { name: 'P02 controls', exact: true });
-  await expect(controls).toBeVisible();
   await expect(page.getByLabel('Selected points')).toHaveValue('P02');
-  await expect(page.getByTestId('movement-result')).toContainText('No movement previewed');
-  await controls.getByRole('button', { name: 'Set Reverse', exact: true }).click();
   await expect(page.getByTestId('points-state')).toHaveText('reverse');
-  await expect(controls.getByRole('button', { name: 'Set Normal' })).toBeVisible();
+  await expect(page.getByTestId('status')).toContainText('Points P02 set to reverse');
+  await expect(page.getByRole('group', { name: 'P02 controls' })).toHaveCount(0);
+  await expect(page.getByTestId('movement-result')).toContainText('No movement previewed');
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect(page.getByTestId('points-state')).toHaveText('normal');
   await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Redo' }).click();
+  await expect(page.getByTestId('points-state')).toHaveText('reverse');
+  await clickTrack(page, 70, 36);
+  await expect(page.getByTestId('points-state')).toHaveText('normal');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByTestId('points-state')).toHaveText('reverse');
   await page.screenshot({ path: 'test-results/yardmaster-map-points.png', fullPage: true });
-  await controls.getByRole('button', { name: 'Close points controls' }).click();
-  await expect(controls).toHaveCount(0);
 });
 
-test('map points controls retain the occupied-zone lock', async ({ page }) => {
+test('clicking occupied points reports the blocker without changing points or history', async ({ page }) => {
   await drag(page, 72, 0, -18, 0);
   await execute(page);
   await clickTrack(page, 0, 0);
-  const controls = page.getByRole('group', { name: 'P01 controls', exact: true });
-  await expect(controls).toContainText('Locked by T01');
-  await expect(controls.getByRole('button', { name: 'Set Reverse' })).toBeDisabled();
+  await expect(page.getByTestId('status')).toContainText('Points P01 remain occupied by T01');
   await expect(page.getByTestId('points-state')).toHaveText('normal');
+  await expect(page.getByRole('group', { name: 'P01 controls' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByTestId('leading-position')).toContainText('R1 @ 20.0 m');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });
 
 test('one mouse workflow: contextual cursors, background pan, then map selection', async ({ page }) => {
@@ -197,7 +201,8 @@ test('one mouse workflow: contextual cursors, background pan, then map selection
   await expect(page.getByTestId('selected-train')).toHaveText('T02');
   await expect(page.getByTestId('leading-position')).toContainText('R3 @ 200.0 m');
   await page.mouse.click(points.x + 100, points.y + 50);
-  await expect(page.getByRole('group', { name: 'P02 controls' })).toBeVisible();
+  await expect(page.getByLabel('Selected points')).toHaveValue('P02');
+  await expect(page.getByTestId('points-state')).toHaveText('reverse');
 });
 
 test('track drag pans without submitting a destination, next short click previews normally', async ({ page }) => {
@@ -224,5 +229,31 @@ test('middle-button pan over a train does not select or move it', async ({ page 
   await expect(page.getByTestId('selected-train')).toHaveText('T01');
   await expect(page.getByTestId('movement-result')).toContainText('No movement previewed');
   await page.mouse.click(points.x - 80, points.y - 20);
-  await expect(page.getByRole('group', { name: 'P02 controls' })).toBeVisible();
+  await expect(page.getByLabel('Selected points')).toHaveValue('P02');
+  await expect(page.getByTestId('points-state')).toHaveText('reverse');
+});
+
+
+test('points cannot be switched on the map during animation', async ({ page }) => {
+  await page.getByRole('button', { name: 'Preview clear move', exact: true }).click();
+  await page.getByRole('button', { name: 'Execute movement' }).click();
+  await clickTrack(page, 70, 36);
+  await expect(page.getByLabel('Selected points')).toHaveValue('P01');
+  await expect(page.getByTestId('status')).toContainText('Moving T01');
+  await expect(page.getByTestId('status')).toContainText('One action added', { timeout: 15000 });
+  await page.getByLabel('Selected points').selectOption('P02');
+  await expect(page.getByTestId('points-state')).toHaveText('normal');
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+});
+
+test('middle-button gestures on points do not switch them', async ({ page }) => {
+  const p = await world(page, 70, 36);
+  await page.mouse.click(p.x, p.y, { button: 'middle' });
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  await page.mouse.move(p.x, p.y); await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(p.x + 60, p.y + 20, { steps: 3 }); await page.mouse.up({ button: 'middle' });
+  await page.getByLabel('Selected points').selectOption('P02');
+  await expect(page.getByTestId('points-state')).toHaveText('normal');
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
 });

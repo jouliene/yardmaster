@@ -75,9 +75,10 @@ export default function App() {
   const undoRedo = (type: 'undo' | 'redo') => { if (locked) return; dispatch({ type }); clearPreview(); setNotice(type === 'undo' ? 'Last action undone.' : 'Action restored.'); };
   const togglePoints = (id = selectedPoints) => {
     if (locked) return;
+    setSelectedPoints(id); clearPreview();
     const result = changePoints(yard, history.present, id);
     if (result.error) setNotice(result.error);
-    else { dispatch({ type: 'commit', scenario: result.scenario }); clearPreview(); setNotice(`Points ${id} set to ${result.scenario.points[id]}.`); }
+    else { dispatch({ type: 'commit', scenario: result.scenario }); setNotice(`Points ${id} set to ${result.scenario.points[id]}.`); }
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -98,7 +99,7 @@ export default function App() {
     <nav aria-label="Main controls">
       <label className="scenario-select">SCENARIO<select aria-label="Scenario" value={history.present.id} disabled={locked} onChange={e => reset(e.target.value)}>{presets.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
       <div className="toolbar-divider"/>
-      <span className="navigation-hint">Drag the background · Click a train or points</span>
+      <span className="navigation-hint">Drag background · Click points to switch</span>
       <div className="toolbar-spacer"/>
       <button disabled={gesture} onClick={() => focusOn('yard')}>Fit Yard</button><button disabled={gesture} onClick={() => focusOn('train')}>Focus Train</button><button disabled={gesture} onClick={() => focusOn('manoeuvre')}>Focus Manoeuvre</button>
       <div className="toolbar-divider"/>
@@ -109,7 +110,6 @@ export default function App() {
         <div className="scenario-hint"><span>EXERCISE {preset.id === 'shunt' ? '01' : preset.id === 'blocked' ? '02' : '03'}</span><p>{preset.hint}</p></div>
         <YardCanvas layout={yard} scenario={scenario} selected={selected} selectedPoints={selectedPoints} onSelect={select}
           onTogglePoints={togglePoints}
-          onPoints={id => { if (!locked) { setSelectedPoints(id); clearPreview(); } }}
           onDestination={destination} onDragStart={(_, p) => { grab.current = p; }}
           onDrag={(id, p) => { if (!busy) showPreview(planDrag(yard, history.present, id, grab.current, p)); }}
           onGesture={setGesture} busy={busy} focus={focus} preview={preview}
